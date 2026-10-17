@@ -1,0 +1,1 @@
+{"dependencies":{"react":"^18.3.1","react-dom":"^18.3.1","recharts":"^2.12.7"},"description":"Real-time microservice health monitoring dashboard","devDependencies":{"@vitejs/plugin-react":"^4.3.4","vite":"^5.4.11"},"name":"servicepulse-dashboard","private":true,"scripts":{"build":"vite build","dev":"vite","preview":"vite preview"},"type":"module","version":"1.0.0"}
