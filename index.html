@@ -1,13 +1,133 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ServicePulse — Microservice Health Dashboard</title>
-    <script type="module" crossorigin src="/servicepulse-dashboard/assets/index-D2awW1VG.js"></script>
-    <link rel="stylesheet" crossorigin href="/servicepulse-dashboard/assets/index-ujdYny8c.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ServicePulse — Microservice Health Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+.app{max-width:1280px;margin:0 auto;padding:24px}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
+.header h1{font-size:24px;font-weight:700}
+.header h1 span{color:#38bdf8}
+.live{display:flex;align-items:center;gap:8px;font-size:13px;color:#94a3b8}
+.live-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px}
+.stat-card .label{font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.stat-card .value{font-size:32px;font-weight:700}
+.stat-card .sub{font-size:13px;color:#64748b;margin-top:4px}
+.section-title{font-size:18px;margin:24px 0 16px}
+.services{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.svc-card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px;border-left:4px solid #64748b}
+.svc-card.healthy{border-left-color:#22c55e}
+.svc-card.degraded{border-left-color:#f59e0b}
+.svc-card.down{border-left-color:#ef4444}
+.svc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.svc-head h3{font-size:16px}
+.badge{font-size:11px;padding:4px 10px;border-radius:20px;text-transform:uppercase;font-weight:600}
+.badge.healthy{background:#22c55e22;color:#22c55e}
+.badge.degraded{background:#f59e0b22;color:#f59e0b}
+.badge.down{background:#ef444422;color:#ef4444}
+.svc-meta{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px}
+.svc-meta .k{color:#64748b}
+.svc-meta .v{text-align:right;font-variant-numeric:tabular-nums}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px}
+@media(max-width:900px){.grid-2{grid-template-columns:1fr}}
+.panel{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px;margin-top:16px}
+.panel h2{font-size:15px;margin-bottom:16px;color:#cbd5e1}
+.incidents{list-style:none}
+.incidents li{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid #334155;font-size:14px}
+.incidents li:last-child{border:none}
+.sev{font-size:11px;padding:3px 8px;border-radius:4px;text-transform:uppercase;font-weight:600;flex-shrink:0}
+.sev.critical{background:#ef444422;color:#ef4444}
+.sev.warning{background:#f59e0b22;color:#f59e0b}
+.sev.info{background:#38bdf822;color:#38bdf8}
+.inc-time{margin-left:auto;color:#64748b;font-size:12px;flex-shrink:0}
+.footer{text-align:center;color:#475569;font-size:12px;margin:32px 0 16px}
+svg text{font-family:inherit}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>Service<span>Pulse</span> — Microservice Health</h1>
+    <div class="live"><span class="live-dot"></span>Live · us-east-1</div>
+  </div>
+  <div class="stats-row" id="stats"></div>
+  <h2 class="section-title">Services</h2>
+  <div class="services" id="services"></div>
+  <div class="grid-2">
+    <div class="panel"><h2>Latency Percentiles (24h)</h2><div id="latency-chart"></div></div>
+    <div class="panel"><h2>Request Volume vs Errors (24h)</h2><div id="traffic-chart"></div></div>
+  </div>
+  <div class="panel"><h2>Recent Incidents</h2><ul class="incidents" id="incidents"></ul></div>
+  <div class="footer">ServicePulse · demo dashboard with simulated telemetry · vanilla JS + SVG</div>
+</div>
+<script>
+const services=[
+{id:'auth-svc',name:'auth-service',status:'healthy',uptime:99.98,latencyP50:42,latencyP95:187,latencyP99:412,reqPerSec:2840,errorRate:0.12,region:'us-east-1'},
+{id:'order-svc',name:'order-service',status:'healthy',uptime:99.95,latencyP50:68,latencyP95:245,latencyP99:580,reqPerSec:1920,errorRate:0.21,region:'us-east-1'},
+{id:'pay-svc',name:'payment-service',status:'degraded',uptime:99.71,latencyP50:145,latencyP95:890,latencyP99:2100,reqPerSec:640,errorRate:1.84,region:'us-east-1'},
+{id:'inv-svc',name:'inventory-service',status:'healthy',uptime:99.99,latencyP50:35,latencyP95:120,latencyP99:310,reqPerSec:3150,errorRate:0.08,region:'us-west-2'},
+{id:'notif-svc',name:'notification-service',status:'down',uptime:98.42,latencyP50:0,latencyP95:0,latencyP99:0,reqPerSec:0,errorRate:100,region:'us-east-1'},
+{id:'search-svc',name:'search-service',status:'healthy',uptime:99.97,latencyP50:55,latencyP95:198,latencyP99:445,reqPerSec:4210,errorRate:0.15,region:'eu-west-1'}];
+const latencyHistory=Array.from({length:24},(_,i)=>({time:String(i).padStart(2,'0')+':00',p50:40+Math.random()*20,p95:180+Math.random()*80,p99:400+Math.random()*150}));
+const trafficHistory=Array.from({length:24},(_,i)=>({time:String(i).padStart(2,'0')+':00',requests:8000+Math.random()*4000,errors:Math.random()*50}));
+const incidents=[
+{id:1,service:'payment-service',severity:'critical',message:'p99 latency exceeded 2s SLO for 15 min',time:'14:32'},
+{id:2,service:'notification-service',severity:'critical',message:'All health checks failing — pod crashloop',time:'13:15'},
+{id:3,service:'payment-service',severity:'warning',message:'Error rate above 1% threshold',time:'11:48'},
+{id:4,service:'order-service',severity:'info',message:'Deployed v2.14.3 successfully',time:'09:20'}];
+
+const healthy=services.filter(s=>s.status==='healthy').length;
+const degraded=services.filter(s=>s.status==='degraded').length;
+const down=services.filter(s=>s.status==='down').length;
+const avgUptime=(services.reduce((a,s)=>a+s.uptime,0)/services.length).toFixed(2);
+const totalRps=services.reduce((a,s)=>a+s.reqPerSec,0).toLocaleString();
+
+document.getElementById('stats').innerHTML=`
+<div class="stat-card"><div class="label">Services Healthy</div><div class="value" style="color:#22c55e">${healthy}/${services.length}</div><div class="sub">${degraded} degraded · ${down} down</div></div>
+<div class="stat-card"><div class="label">Avg Uptime (30d)</div><div class="value">${avgUptime}%</div></div>
+<div class="stat-card"><div class="label">Total Throughput</div><div class="value">${totalRps}</div><div class="sub">requests / sec</div></div>
+<div class="stat-card"><div class="label">Open Incidents</div><div class="value" style="color:#f59e0b">3</div><div class="sub">2 critical · 1 warning</div></div>`;
+
+document.getElementById('services').innerHTML=services.map(s=>`
+<div class="svc-card ${s.status}"><div class="svc-head"><h3>${s.name}</h3><span class="badge ${s.status}">${s.status}</span></div>
+<div class="svc-meta"><span class="k">Uptime (30d)</span><span class="v">${s.uptime}%</span>
+<span class="k">p50 / p95 / p99</span><span class="v">${s.latencyP50} / ${s.latencyP95} / ${s.latencyP99} ms</span>
+<span class="k">Throughput</span><span class="v">${s.reqPerSec.toLocaleString()} rps</span>
+<span class="k">Error rate</span><span class="v">${s.errorRate}%</span>
+<span class="k">Region</span><span class="v">${s.region}</span></div></div>`).join('');
+
+function lineChart(el,data,lines){
+const W=600,H=260,P=36;
+const maxV=Math.max(...data.flatMap(d=>lines.map(l=>d[l.key])))*1.1;
+const x=i=>P+(i/(data.length-1))*(W-P*2), y=v=>H-P-(v/maxV)*(H-P*2);
+let svg=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">`;
+[0.25,0.5,0.75,1].forEach(f=>{svg+=`<line x1="${P}" x2="${W-P}" y1="${y(maxV*f)}" y2="${y(maxV*f)}" stroke="#1f2937" stroke-dasharray="3 3"/>`;});
+lines.forEach(l=>{svg+=`<polyline fill="none" stroke="${l.color}" stroke-width="2" points="${data.map((d,i)=>x(i)+','+y(d[l.key])).join(' ')}"/>`;});
+data.forEach((d,i)=>{if(i%4===0)svg+=`<text x="${x(i)}" y="${H-10}" fill="#64748b" font-size="10" text-anchor="middle">${d.time}</text>`;});
+lines.forEach((l,i)=>{svg+=`<g transform="translate(${W-140},${12+i*18})"><rect width="24" height="4" fill="${l.color}" y="-3"/><text x="30" fill="#94a3b8" font-size="11">${l.name}</text></g>`;});
+document.getElementById(el).innerHTML=svg+'</svg>';
+}
+lineChart('latency-chart',latencyHistory,[{key:'p50',name:'p50',color:'#38bdf8'},{key:'p95',name:'p95',color:'#f59e0b'},{key:'p99',name:'p99',color:'#ef4444'}]);
+
+(function(){
+const data=trafficHistory,W=600,H=260,P=36;
+const maxR=Math.max(...data.map(d=>d.requests))*1.1, maxE=Math.max(...data.map(d=>d.errors),1)*1.1;
+const x=i=>P+(i/(data.length-1))*(W-P*2), yR=v=>H-P-(v/maxR)*(H-P*2), yE=v=>H-P-(v/maxE)*(H-P*2);
+const pts=data.map((d,i)=>x(i)+','+yR(d.requests)).join(' ');
+let svg=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}"><polygon points="${P},${H-P} ${pts} ${W-P},${H-P}" fill="#38bdf822"/><polyline fill="none" stroke="#38bdf8" stroke-width="2" points="${pts}"/>`;
+data.forEach((d,i)=>{svg+=`<rect x="${x(i)-2}" y="${yE(d.errors)}" width="4" height="${H-P-yE(d.errors)}" fill="#ef444488"/>`;});
+data.forEach((d,i)=>{if(i%4===0)svg+=`<text x="${x(i)}" y="${H-10}" fill="#64748b" font-size="10" text-anchor="middle">${d.time}</text>`;});
+svg+=`<g transform="translate(${W-160},12)"><rect width="24" height="4" fill="#38bdf8" y="-3"/><text x="30" fill="#94a3b8" font-size="11">requests</text></g><g transform="translate(${W-160},30)"><rect width="24" height="8" fill="#ef444488"/><text x="30" fill="#94a3b8" font-size="11">errors</text></g>`;
+document.getElementById('traffic-chart').innerHTML=svg+'</svg>';
+})();
+
+document.getElementById('incidents').innerHTML=incidents.map(i=>`<li><span class="sev ${i.severity}">${i.severity}</span><div><strong>${i.service}</strong> — ${i.message}</div><span class="inc-time">${i.time}</span></li>`).join('');
+</script>
+</body>
 </html>
