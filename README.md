@@ -2,6 +2,8 @@
 
 A real-time monitoring dashboard for distributed microservice architectures. Visualizes service health, latency percentiles, throughput, and incidents in a clean dark-themed UI.
 
+**Live demo:** https://sivad5712.github.io/servicepulse-dashboard/
+
 ## Features
 
 - **Service health overview** — per-service status (healthy / degraded / down) with uptime, latency p50/p95/p99, throughput, and error rates
@@ -31,7 +33,7 @@ npm run build
 
 ## Deployment
 
-Deployed on Vercel — pushes to `main` auto-deploy.
+Live on GitHub Pages: https://sivad5712.github.io/servicepulse-dashboard/ — pushes to the `gh-pages` branch auto-deploy.
 
 ## What I Learned
 
