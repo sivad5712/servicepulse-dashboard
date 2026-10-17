@@ -1,9 +1,5 @@
 import React from 'react';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  AreaChart, Area, BarChart, Bar,
-} from 'recharts';
-import { services, latencyHistory, trafficHistory, incidents, statusColor } from './data.js';
+import { services, latencyHistory, trafficHistory, incidents } from './data.js';
 import './index.css';
 
 function StatCard({ label, value, sub, color }) {
@@ -31,6 +27,65 @@ function ServiceCard({ svc }) {
         <span className="k">Region</span><span className="v">{svc.region}</span>
       </div>
     </div>
+  );
+}
+
+// Lightweight SVG line chart
+function LineChart({ data, lines, height = 260 }) {
+  const W = 600, H = height, P = 36;
+  const maxV = Math.max(...data.flatMap(d => lines.map(l => d[l.key]))) * 1.1;
+  const x = i => P + (i / (data.length - 1)) * (W - P * 2);
+  const y = v => H - P - (v / maxV) * (H - P * 2);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={height}>
+      {[0.25, 0.5, 0.75, 1].map(f => (
+        <line key={f} x1={P} x2={W - P} y1={y(maxV * f)} y2={y(maxV * f)} stroke="#1f2937" strokeDasharray="3 3" />
+      ))}
+      {lines.map(l => (
+        <polyline key={l.key} fill="none" stroke={l.color} strokeWidth="2"
+          points={data.map((d, i) => `${x(i)},${y(d[l.key])}`).join(' ')} />
+      ))}
+      {data.filter((_, i) => i % 4 === 0).map((d, i) => (
+        <text key={i} x={x(i * 4)} y={H - 10} fill="#64748b" fontSize="10" textAnchor="middle">{d.time}</text>
+      ))}
+      <g>
+        {lines.map((l, i) => (
+          <g key={l.key} transform={`translate(${W - 140}, ${12 + i * 18})`}>
+            <rect width="24" height="4" fill={l.color} y="-3" />
+            <text x="30" fill="#94a3b8" fontSize="11">{l.name}</text>
+          </g>
+        ))}
+      </g>
+    </svg>
+  );
+}
+
+// Lightweight SVG area/bar combo
+function TrafficChart({ data, height = 260 }) {
+  const W = 600, H = height, P = 36;
+  const maxR = Math.max(...data.map(d => d.requests)) * 1.1;
+  const maxE = Math.max(...data.map(d => d.errors), 1) * 1.1;
+  const x = i => P + (i / (data.length - 1)) * (W - P * 2);
+  const yR = v => H - P - (v / maxR) * (H - P * 2);
+  const yE = v => H - P - (v / maxE) * (H - P * 2);
+  const pts = data.map((d, i) => `${x(i)},${yR(d.requests)}`).join(' ');
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={height}>
+      <polygon points={`${P},${H - P} ${pts} ${W - P},${H - P}`} fill="#38bdf822" />
+      <polyline fill="none" stroke="#38bdf8" strokeWidth="2" points={pts} />
+      {data.map((d, i) => (
+        <rect key={i} x={x(i) - 2} y={yE(d.errors)} width="4" height={H - P - yE(d.errors)} fill="#ef444488" />
+      ))}
+      {data.filter((_, i) => i % 4 === 0).map((d, i) => (
+        <text key={i} x={x(i * 4)} y={H - 10} fill="#64748b" fontSize="10" textAnchor="middle">{d.time}</text>
+      ))}
+      <g transform={`translate(${W - 160}, 12)`}>
+        <rect width="24" height="4" fill="#38bdf8" y="-3" /><text x="30" fill="#94a3b8" fontSize="11">requests</text>
+      </g>
+      <g transform={`translate(${W - 160}, 30)`}>
+        <rect width="24" height="8" fill="#ef444488" /><text x="30" fill="#94a3b8" fontSize="11">errors</text>
+      </g>
+    </svg>
   );
 }
 
@@ -63,32 +118,15 @@ export default function App() {
       <div className="grid-2">
         <div className="panel">
           <h2>Latency Percentiles (24h)</h2>
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={latencyHistory}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-              <XAxis dataKey="time" stroke="#64748b" fontSize={11} interval={3} />
-              <YAxis stroke="#64748b" fontSize={11} />
-              <Tooltip contentStyle={{ background: '#111827', border: '1px solid #1f2937' }} />
-              <Legend />
-              <Line type="monotone" dataKey="p50" stroke="#38bdf8" name="p50" dot={false} />
-              <Line type="monotone" dataKey="p95" stroke="#f59e0b" name="p95" dot={false} />
-              <Line type="monotone" dataKey="p99" stroke="#ef4444" name="p99" dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+          <LineChart data={latencyHistory} lines={[
+            { key: 'p50', name: 'p50', color: '#38bdf8' },
+            { key: 'p95', name: 'p95', color: '#f59e0b' },
+            { key: 'p99', name: 'p99', color: '#ef4444' },
+          ]} />
         </div>
         <div className="panel">
           <h2>Request Volume vs Errors (24h)</h2>
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={trafficHistory}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-              <XAxis dataKey="time" stroke="#64748b" fontSize={11} interval={3} />
-              <YAxis stroke="#64748b" fontSize={11} />
-              <Tooltip contentStyle={{ background: '#111827', border: '1px solid #1f2937' }} />
-              <Legend />
-              <Area type="monotone" dataKey="requests" stroke="#38bdf8" fill="#38bdf822" name="requests" />
-              <Area type="monotone" dataKey="errors" stroke="#ef4444" fill="#ef444422" name="errors" />
-            </AreaChart>
-          </ResponsiveContainer>
+          <TrafficChart data={trafficHistory} />
         </div>
       </div>
 
@@ -105,7 +143,7 @@ export default function App() {
         </ul>
       </div>
 
-      <div className="footer">ServicePulse · demo dashboard with simulated telemetry · built with React + Recharts</div>
+      <div className="footer">ServicePulse · demo dashboard with simulated telemetry · built with React + custom SVG charts</div>
     </div>
   );
 }
